@@ -1,0 +1,10 @@
+-r base.txt
+
+# Production Server
+gunicorn>=21.2,<21.3
+
+# Monitoring & Logging
+python-json-logger>=2.0,<2.1
+
+# Security
+django-environ>=0.11,<0.12

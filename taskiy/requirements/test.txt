@@ -1,0 +1,18 @@
+-r base.txt
+
+# Testing Framework
+pytest>=8.0,<8.1
+pytest-django>=4.8,<4.9
+pytest-cov>=4.1,<4.2
+pytest-xdist>=3.5,<3.6
+pytest-mock>=3.12,<3.13
+
+# Test Data
+factory-boy>=3.3,<3.4
+faker>=24.0,<25.0
+
+# Coverage
+coverage>=7.4,<7.5
+
+# Performance Testing
+locust>=2.31,<2.32
