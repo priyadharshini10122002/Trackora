@@ -220,8 +220,15 @@ class TaskHistory(models.Model):
         return f'{self.task.title}: {self.old_status} → {self.new_status}'
     
     def save(self, *args, **kwargs):
-        """Override save to prevent updates"""
-        if self.pk:
+        """Override save to prevent updates.
+
+        We detect new-vs-existing via `self._state.adding` rather than
+        `self.pk` because the id has a `default=uuid.uuid4`, which means
+        self.pk is populated on instance construction — long before the
+        first INSERT. Using `self.pk` here used to incorrectly block the
+        very first save as well.
+        """
+        if not self._state.adding:
             raise ValueError('TaskHistory records cannot be modified')
         super().save(*args, **kwargs)
     
@@ -359,13 +366,16 @@ class Attachment(models.Model):
     )
     filename = models.CharField(
         max_length=255,
+        blank=True, default='',
         help_text=_('Original filename')
     )
     file_size = models.PositiveIntegerField(
+        default=0,
         help_text=_('File size in bytes')
     )
     mime_type = models.CharField(
         max_length=100,
+        blank=True, default='',
         help_text=_('MIME type of the file')
     )
     uploaded_at = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -383,10 +393,14 @@ class Attachment(models.Model):
         return f'{self.filename} on {self.task.title}'
     
     def save(self, *args, **kwargs):
-        """Set filename and file_size on save"""
+        """Set filename, file_size and mime_type on save"""
         if self.file:
             self.filename = os.path.basename(self.file.name)
             self.file_size = self.file.size
+            if not self.mime_type:
+                import mimetypes
+                guessed, _ = mimetypes.guess_type(self.file.name)
+                self.mime_type = guessed or 'application/octet-stream'
         super().save(*args, **kwargs)
     
     def delete(self, *args, **kwargs):

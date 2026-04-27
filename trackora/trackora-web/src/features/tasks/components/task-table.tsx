@@ -1,4 +1,4 @@
-import type { Task } from '@/shared/types/api';
+import type { Task, Priority } from '@/shared/types/api';
 import {
   Table,
   TableHeader,
@@ -14,12 +14,25 @@ import {
 import { cn } from '@/shared/lib/cn';
 import { formatRelative, formatDate } from '@/shared/lib/date';
 import { StatusBadge } from './status-badge';
-import { PriorityBadge } from './priority-badge';
 
 type TaskTableProps = {
   tasks: Task[];
   isLoading?: boolean;
   onRowClick?: (task: Task) => void;
+};
+
+const PRIORITY_DOT: Record<string, string> = {
+  LOW: 'bg-gray-400',
+  MEDIUM: 'bg-blue-500',
+  HIGH: 'bg-amber-500',
+  CRITICAL: 'bg-red-500',
+};
+
+const PRIORITY_LABEL: Record<string, string> = {
+  LOW: 'Low',
+  MEDIUM: 'Medium',
+  HIGH: 'High',
+  CRITICAL: 'Critical',
 };
 
 function SlaIndicator({
@@ -40,7 +53,7 @@ function SlaIndicator({
     <div className="flex items-center gap-2">
       <Progress
         value={percentage}
-        className={cn('h-2 w-16', isBreached && '[&>div]:bg-red-500')}
+        className={cn('h-1.5 w-16', isBreached && '[&>div]:bg-red-500')}
       />
       <span
         className={cn('text-xs tabular-nums', isBreached && 'text-red-600 font-medium')}
@@ -83,19 +96,49 @@ function SkeletonRows() {
   );
 }
 
+function PriorityDot({ priority }: { priority: Priority }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className={cn(
+          'inline-block h-2 w-2 rounded-full',
+          PRIORITY_DOT[priority] ?? 'bg-gray-400',
+        )}
+      />
+      <span className="text-xs text-muted-foreground">
+        {PRIORITY_LABEL[priority] ?? priority}
+      </span>
+    </div>
+  );
+}
+
 export function TaskTable({ tasks, isLoading, onRowClick }: TaskTableProps) {
   return (
-    <div className="rounded-lg border bg-card shadow-sm">
+    <div className="rounded-xl border bg-card shadow-[var(--shadow-card)] overflow-hidden">
       <Table>
         <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            <TableHead className="w-[280px]">Title</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Priority</TableHead>
-            <TableHead className="hidden md:table-cell">Assigned To</TableHead>
-            <TableHead>Due Date</TableHead>
-            <TableHead className="hidden md:table-cell">SLA</TableHead>
-            <TableHead className="hidden md:table-cell">Created</TableHead>
+          <TableRow className="hover:bg-transparent border-b border-border/60">
+            <TableHead className="w-[280px] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Title
+            </TableHead>
+            <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Status
+            </TableHead>
+            <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Priority
+            </TableHead>
+            <TableHead className="hidden md:table-cell text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Assigned To
+            </TableHead>
+            <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Due Date
+            </TableHead>
+            <TableHead className="hidden md:table-cell text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              SLA
+            </TableHead>
+            <TableHead className="hidden md:table-cell text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Created
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -115,13 +158,13 @@ export function TaskTable({ tasks, isLoading, onRowClick }: TaskTableProps) {
               <TableRow
                 key={task.id}
                 className={cn(
-                  'transition-colors hover:bg-muted/50',
+                  'group transition-all duration-150 hover:bg-accent/40 hover:shadow-sm border-l-2 border-l-transparent hover:border-l-primary/60',
                   onRowClick && 'cursor-pointer',
                 )}
                 onClick={() => onRowClick?.(task)}
               >
                 <TableCell className="max-w-[280px]">
-                  <span className="font-medium text-foreground truncate block">
+                  <span className="font-medium text-foreground truncate block group-hover:text-primary transition-colors">
                     {task.title}
                   </span>
                 </TableCell>
@@ -129,22 +172,22 @@ export function TaskTable({ tasks, isLoading, onRowClick }: TaskTableProps) {
                   <StatusBadge status={task.status} />
                 </TableCell>
                 <TableCell>
-                  <PriorityBadge priority={task.priority} />
+                  <PriorityDot priority={task.priority} />
                 </TableCell>
                 <TableCell className="hidden md:table-cell">
-                  {task.assigned_to ? (
+                  {task.assigned_to_name ? (
                     <div className="flex items-center gap-2">
-                      <Avatar className="h-7 w-7">
-                        <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                          {task.assigned_to.charAt(0).toUpperCase()}
+                      <Avatar className="h-6 w-6">
+                        <AvatarFallback className="text-[10px] bg-primary/10 text-primary font-medium">
+                          {task.assigned_to_name.charAt(0).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <span className="text-sm truncate max-w-[120px]">
-                        {task.assigned_to}
+                        {task.assigned_to_name}
                       </span>
                     </div>
                   ) : (
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       Unassigned
                     </span>
                   )}
@@ -160,7 +203,7 @@ export function TaskTable({ tasks, isLoading, onRowClick }: TaskTableProps) {
                       {formatDate(task.due_date)}
                     </span>
                   ) : (
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       No due date
                     </span>
                   )}
@@ -169,15 +212,15 @@ export function TaskTable({ tasks, isLoading, onRowClick }: TaskTableProps) {
                   {task.sla_hours != null ? (
                     <SlaIndicator
                       slaHours={task.sla_hours}
-                      elapsedHours={task.elapsed_hours}
-                      isBreached={task.is_sla_breached}
+                      elapsedHours={task.elapsed_hours ?? 0}
+                      isBreached={task.is_sla_breached ?? false}
                     />
                   ) : (
-                    <span className="text-sm text-muted-foreground">N/A</span>
+                    <span className="text-xs text-muted-foreground">N/A</span>
                   )}
                 </TableCell>
                 <TableCell className="hidden md:table-cell">
-                  <span className="text-sm text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     {formatRelative(task.created_at)}
                   </span>
                 </TableCell>

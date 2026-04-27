@@ -20,9 +20,14 @@ function NewTaskPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="animate-fade-in-up space-y-6">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          asChild
+          className="transition-all duration-150 hover:shadow-sm"
+        >
           <Link to="/tasks">
             <ArrowLeft className="h-4 w-4" />
           </Link>
@@ -30,7 +35,7 @@ function NewTaskPage() {
         <PageHeader title="New Task" description="Create a new task" />
       </div>
 
-      <Card>
+      <Card className="glass-subtle border-border/50 shadow-[var(--shadow-card)]">
         <CardContent className="p-6">
           <TaskForm
             mode="create"

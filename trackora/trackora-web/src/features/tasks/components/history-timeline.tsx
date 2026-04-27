@@ -1,7 +1,6 @@
 import { ArrowRight } from 'lucide-react';
 import type { TaskHistory } from '@/shared/types/api';
 import { Skeleton } from '@/shared/ui';
-import { cn } from '@/shared/lib/cn';
 import { formatRelative } from '@/shared/lib/date';
 import { StatusBadge } from './status-badge';
 
@@ -38,17 +37,23 @@ export function HistoryTimeline({ history, isLoading }: HistoryTimelineProps) {
 
   // Newest first
   const sorted = [...history].sort(
-    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    (a, b) =>
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
   );
 
   return (
-    <div className="relative space-y-8 border-l-2 border-muted pl-6">
+    <div className="relative space-y-8 border-l-2 border-border/60 pl-6">
       {sorted.map((entry) => (
-        <div key={entry.id} className="relative">
+        <div
+          key={entry.id}
+          className="group relative transition-opacity duration-200"
+        >
           {/* Dot on the timeline */}
-          <div className="absolute -left-[31px] top-1.5 h-3 w-3 rounded-full bg-primary ring-2 ring-background" />
+          <div className="absolute -left-[31px] top-1.5 flex items-center justify-center">
+            <div className="h-3 w-3 rounded-full bg-primary ring-[3px] ring-background transition-transform duration-200 group-hover:scale-125" />
+          </div>
 
-          <div className="space-y-1.5">
+          <div className="rounded-lg p-2 -ml-2 transition-all duration-200 hover:bg-muted/30 space-y-1.5">
             {/* Transition badges */}
             <div className="flex flex-wrap items-center gap-1.5">
               {entry.old_status ? (
@@ -77,7 +82,7 @@ export function HistoryTimeline({ history, isLoading }: HistoryTimelineProps) {
 
             {/* Reason */}
             {entry.reason && (
-              <div className="mt-1.5 rounded-md bg-muted/50 px-3 py-2">
+              <div className="mt-1.5 rounded-lg border border-border/50 bg-muted/30 px-3 py-2">
                 <p className="text-sm italic text-muted-foreground">
                   {entry.reason}
                 </p>

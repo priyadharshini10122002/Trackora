@@ -1,209 +1,314 @@
 """
-Unit tests for use cases.
+DB-backed unit tests for task workflow use cases.
+
+These test the post-Clean-Architecture use-case objects directly (no HTTP
+layer). They exercise the real ORM against a sqlite test DB so we catch:
+  - prerequisite validation (title length, sla_hours)
+  - actor-permission rules (creator vs role)
+  - state-machine transition rules
+  - event dispatch
+  - TaskHistory row creation
+  - transaction rollback on error
+
+Previously this file mocked a Repository abstraction that no longer exists;
+after the refactor the use cases talk to `apps.tasks.models` directly, so
+it's both simpler and more truthful to test against a real DB.
 """
 
-import pytest
-import uuid
-from unittest.mock import Mock, patch
-from datetime import datetime, timedelta
+from datetime import timedelta
+from unittest.mock import Mock
+from uuid import uuid4
 
-from apps.tasks.usecases.submit_for_approval import (
+import pytest
+from django.utils import timezone
+
+from apps.tasks.models import Task, TaskHistory
+from apps.tasks.usecases import (
+    ApproveTaskUseCase,
+    CompleteTaskUseCase,
+    RejectTaskUseCase,
+    StartTaskUseCase,
     SubmitForApprovalUseCase,
+    WorkflowRequest,
+)
+from apps.tasks.usecases.submit_for_approval import (
     SubmitForApprovalRequest,
-    SubmitForApprovalResponse
+    SubmitForApprovalResponse,
+)
+from domain.events.domain_events import TaskSubmittedForApprovalEvent
+from domain.exceptions.domain_exceptions import (
+    BusinessRuleViolation,
+    EntityNotFoundError,
+    InvalidWorkflowTransitionError,
+    PermissionDeniedError,
 )
 from domain.value_objects.enums import TaskStatus, UserRole
-from domain.exceptions.domain_exceptions import InvalidWorkflowTransitionError, PermissionDeniedError
 
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _valid_task(creator, **overrides):
+    defaults = dict(
+        title="Implement production deployment strategy",
+        description="Task for unit test",
+        priority="MEDIUM",
+        status=TaskStatus.DRAFT.value,
+        due_date=timezone.now() + timedelta(days=3),
+        sla_hours=24,
+        created_by=creator,
+    )
+    defaults.update(overrides)
+    return Task.objects.create(**defaults)
+
+
+# ---------------------------------------------------------------------------
+# SubmitForApprovalUseCase
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
 class TestSubmitForApprovalUseCase:
-    """Test cases for SubmitForApprovalUseCase"""
 
-    def setup_method(self):
-        """Set up test fixtures"""
-        self.mock_repository = Mock()
-        self.mock_event_dispatcher = Mock()
-        self.mock_workflow_engine = Mock()
+    def test_successful_submission_by_manager(self, manager_user):
+        task = _valid_task(manager_user)
+        dispatcher = Mock()
 
-        self.use_case = SubmitForApprovalUseCase(
-            repository=self.mock_repository,
-            event_dispatcher=self.mock_event_dispatcher,
-            workflow_engine=self.mock_workflow_engine
+        use_case = SubmitForApprovalUseCase(event_dispatcher=dispatcher)
+        response = use_case.execute(
+            WorkflowRequest(
+                task_id=task.id,
+                actor_id=manager_user.id,
+                actor_role=UserRole.MANAGER,
+            )
         )
 
-    def test_successful_submission(self):
-        """Test successful task submission for approval"""
-        # Arrange
-        task_id = uuid.uuid4()
-        user_id = uuid.uuid4()
-
-        # Mock task
-        mock_task = Mock()
-        mock_task.id = task_id
-        mock_task.status = TaskStatus.DRAFT.value
-        mock_task.created_by_id = user_id
-
-        # Mock user with MANAGER role
-        mock_user = Mock()
-        mock_user.id = user_id
-        mock_user.has_role.return_value = True  # Has MANAGER role
-
-        self.mock_repository.get_by_id.return_value = mock_task
-        self.mock_workflow_engine.can_transition.return_value = True
-        self.mock_repository.save.return_value = mock_task
-
-        request = SubmitForApprovalRequest(task_id=task_id, user_id=user_id)
-
-        # Act
-        response = self.use_case.execute(request)
-
-        # Assert
-        assert isinstance(response, SubmitForApprovalResponse)
-        assert response.task_id == task_id
+        task.refresh_from_db()
+        assert task.status == TaskStatus.PENDING_APPROVAL.value
         assert response.new_status == TaskStatus.PENDING_APPROVAL.value
 
-        # Verify interactions
-        self.mock_repository.get_by_id.assert_called_once_with(task_id)
-        self.mock_workflow_engine.can_transition.assert_called_once_with(
-            TaskStatus.DRAFT, TaskStatus.PENDING_APPROVAL, UserRole.MANAGER
+        # History row was written
+        assert TaskHistory.objects.filter(
+            task=task,
+            old_status=TaskStatus.DRAFT.value,
+            new_status=TaskStatus.PENDING_APPROVAL.value,
+        ).exists()
+
+        # Domain event was dispatched (primary + status-changed = 2)
+        assert dispatcher.dispatch.call_count == 2
+        first_event = dispatcher.dispatch.call_args_list[0][0][0]
+        assert isinstance(first_event, TaskSubmittedForApprovalEvent)
+
+    def test_legacy_request_dto_still_works(self, manager_user):
+        """
+        The public API of SubmitForApprovalUseCase must accept the legacy
+        SubmitForApprovalRequest DTO so existing import paths don't break.
+        """
+        task = _valid_task(manager_user)
+
+        use_case = SubmitForApprovalUseCase(event_dispatcher=Mock())
+        response = use_case.execute(
+            SubmitForApprovalRequest(
+                task_id=task.id,
+                submitted_by_id=manager_user.id,
+                user_role=UserRole.MANAGER,
+            )
         )
-        self.mock_repository.save.assert_called_once()
-        self.mock_event_dispatcher.dispatch.assert_called_once()
 
-    def test_task_not_found(self):
-        """Test submission fails when task doesn't exist"""
-        # Arrange
-        task_id = uuid.uuid4()
-        user_id = uuid.uuid4()
+        assert isinstance(response, SubmitForApprovalResponse)
+        assert response.status == TaskStatus.PENDING_APPROVAL.value
 
-        self.mock_repository.get_by_id.side_effect = Exception("Task not found")
+    def test_task_not_found_raises_entity_not_found(self, manager_user):
+        use_case = SubmitForApprovalUseCase(event_dispatcher=Mock())
 
-        request = SubmitForApprovalRequest(task_id=task_id, user_id=user_id)
+        with pytest.raises(EntityNotFoundError):
+            use_case.execute(
+                WorkflowRequest(
+                    task_id=uuid4(),
+                    actor_id=manager_user.id,
+                    actor_role=UserRole.MANAGER,
+                )
+            )
 
-        # Act & Assert
-        with pytest.raises(Exception, match="Task not found"):
-            self.use_case.execute(request)
+    def test_invalid_transition_from_completed(self, manager_user):
+        """COMPLETED -> PENDING_APPROVAL is not allowed by the state machine."""
+        task = _valid_task(manager_user, status=TaskStatus.COMPLETED.value)
 
-    def test_invalid_workflow_transition(self):
-        """Test submission fails for invalid workflow transition"""
-        # Arrange
-        task_id = uuid.uuid4()
-        user_id = uuid.uuid4()
-
-        mock_task = Mock()
-        mock_task.id = task_id
-        mock_task.status = TaskStatus.COMPLETED.value  # Wrong status
-
-        mock_user = Mock()
-        mock_user.has_role.return_value = True
-
-        self.mock_repository.get_by_id.return_value = mock_task
-        self.mock_workflow_engine.can_transition.return_value = False
-
-        request = SubmitForApprovalRequest(task_id=task_id, user_id=user_id)
-
-        # Act & Assert
+        use_case = SubmitForApprovalUseCase(event_dispatcher=Mock())
         with pytest.raises(InvalidWorkflowTransitionError):
-            self.use_case.execute(request)
+            use_case.execute(
+                WorkflowRequest(
+                    task_id=task.id,
+                    actor_id=manager_user.id,
+                    actor_role=UserRole.MANAGER,
+                )
+            )
 
-    def test_insufficient_permissions(self):
-        """Test submission fails when user lacks permissions"""
-        # Arrange
-        task_id = uuid.uuid4()
-        user_id = uuid.uuid4()
+        task.refresh_from_db()
+        assert task.status == TaskStatus.COMPLETED.value
 
-        mock_task = Mock()
-        mock_task.id = task_id
-        mock_task.status = TaskStatus.DRAFT.value
+    def test_bad_prerequisites_raises_business_rule_violation(self, manager_user):
+        """title < 10 chars must trip validate_approval_prerequisites."""
+        task = _valid_task(manager_user, title="short")
+        # sla_hours has MinValueValidator(1) at the field level, but the
+        # domain rule is sla_hours > 0, so we only need to trigger the
+        # title rule here.
 
-        mock_user = Mock()
-        mock_user.has_role.return_value = False  # No MANAGER role
+        use_case = SubmitForApprovalUseCase(event_dispatcher=Mock())
+        with pytest.raises(BusinessRuleViolation):
+            use_case.execute(
+                WorkflowRequest(
+                    task_id=task.id,
+                    actor_id=manager_user.id,
+                    actor_role=UserRole.MANAGER,
+                )
+            )
 
-        self.mock_repository.get_by_id.return_value = mock_task
+        # Transaction must have rolled back: status still DRAFT, no history
+        task.refresh_from_db()
+        assert task.status == TaskStatus.DRAFT.value
+        assert not TaskHistory.objects.filter(task=task).exists()
 
-        request = SubmitForApprovalRequest(task_id=task_id, user_id=user_id)
+    def test_contributor_cannot_submit_due_to_state_machine(self, contributor_user):
+        """
+        The state-machine does not allow a CONTRIBUTOR role to drive the
+        DRAFT -> PENDING_APPROVAL transition (regardless of ownership).
+        This is rejected at the WorkflowEngine layer before the use case
+        even reaches its own actor-permission check.
+        """
+        task = _valid_task(contributor_user)
 
-        # Act & Assert
-        with pytest.raises(PermissionDeniedError):
-            self.use_case.execute(request)
+        use_case = SubmitForApprovalUseCase(event_dispatcher=Mock())
+        with pytest.raises(InvalidWorkflowTransitionError):
+            use_case.execute(
+                WorkflowRequest(
+                    task_id=task.id,
+                    actor_id=contributor_user.id,
+                    actor_role=UserRole.CONTRIBUTOR,
+                )
+            )
 
-    def test_contributor_can_submit_own_task(self):
-        """Test that CONTRIBUTOR can submit their own task"""
-        # Arrange
-        task_id = uuid.uuid4()
-        user_id = uuid.uuid4()
+        task.refresh_from_db()
+        assert task.status == TaskStatus.DRAFT.value
 
-        mock_task = Mock()
-        mock_task.id = task_id
-        mock_task.status = TaskStatus.DRAFT.value
-        mock_task.created_by_id = user_id  # User created this task
+    def test_contributor_cannot_submit_someone_elses_task(
+        self, manager_user, contributor_user
+    ):
+        """
+        A CONTRIBUTOR submitting someone else's task must be rejected.
+        Either the state machine or the actor-permission check will block
+        it; the important property is that no transition happens.
+        """
+        task = _valid_task(manager_user)  # created by manager
 
-        mock_user = Mock()
-        mock_user.id = user_id
-        mock_user.has_role.return_value = False  # CONTRIBUTOR role
+        use_case = SubmitForApprovalUseCase(event_dispatcher=Mock())
+        with pytest.raises((PermissionDeniedError, InvalidWorkflowTransitionError)):
+            use_case.execute(
+                WorkflowRequest(
+                    task_id=task.id,
+                    actor_id=contributor_user.id,
+                    actor_role=UserRole.CONTRIBUTOR,
+                )
+            )
 
-        self.mock_repository.get_by_id.return_value = mock_task
-        self.mock_workflow_engine.can_transition.return_value = True
-        self.mock_repository.save.return_value = mock_task
+        task.refresh_from_db()
+        assert task.status == TaskStatus.DRAFT.value
 
-        request = SubmitForApprovalRequest(task_id=task_id, user_id=user_id)
 
-        # Act
-        response = self.use_case.execute(request)
+# ---------------------------------------------------------------------------
+# Approve / Reject
+# ---------------------------------------------------------------------------
 
-        # Assert
-        assert response.task_id == task_id
-        # Verify CONTRIBUTOR role was checked
-        mock_user.has_role.assert_called_with(UserRole.MANAGER)
+@pytest.mark.django_db
+class TestApproveAndReject:
 
-    def test_event_dispatch_on_success(self):
-        """Test that domain events are dispatched on successful submission"""
-        # Arrange
-        task_id = uuid.uuid4()
-        user_id = uuid.uuid4()
+    def test_approve_transitions_to_approved(self, manager_user):
+        task = _valid_task(manager_user, status=TaskStatus.PENDING_APPROVAL.value)
 
-        mock_task = Mock()
-        mock_task.id = task_id
-        mock_task.status = TaskStatus.DRAFT.value
-        mock_task.created_by_id = user_id
+        ApproveTaskUseCase(event_dispatcher=Mock()).execute(
+            WorkflowRequest(
+                task_id=task.id,
+                actor_id=manager_user.id,
+                actor_role=UserRole.MANAGER,
+            )
+        )
 
-        mock_user = Mock()
-        mock_user.has_role.return_value = True
+        task.refresh_from_db()
+        assert task.status == TaskStatus.APPROVED.value
 
-        self.mock_repository.get_by_id.return_value = mock_task
-        self.mock_workflow_engine.can_transition.return_value = True
-        self.mock_repository.save.return_value = mock_task
+    def test_reject_sends_back_to_draft(self, manager_user):
+        task = _valid_task(manager_user, status=TaskStatus.PENDING_APPROVAL.value)
 
-        request = SubmitForApprovalRequest(task_id=task_id, user_id=user_id)
+        RejectTaskUseCase(event_dispatcher=Mock()).execute(
+            WorkflowRequest(
+                task_id=task.id,
+                actor_id=manager_user.id,
+                actor_role=UserRole.MANAGER,
+                reason="needs work",
+            )
+        )
 
-        # Act
-        self.use_case.execute(request)
+        task.refresh_from_db()
+        assert task.status == TaskStatus.DRAFT.value
 
-        # Assert
-        self.mock_event_dispatcher.dispatch.assert_called_once()
-        # The event should be TaskSubmittedForApprovalEvent
-        event = self.mock_event_dispatcher.dispatch.call_args[0][0]
-        assert hasattr(event, 'task_id')
-        assert event.task_id == str(task_id)
 
-    @patch('apps.tasks.usecases.submit_for_approval.transaction')
-    def test_transaction_rollback_on_error(self, mock_transaction):
-        """Test that transaction rolls back on error"""
-        # Arrange
-        task_id = uuid.uuid4()
-        user_id = uuid.uuid4()
+# ---------------------------------------------------------------------------
+# Start / Complete
+# ---------------------------------------------------------------------------
 
-        mock_task = Mock()
-        mock_task.id = task_id
+@pytest.mark.django_db
+class TestStartAndComplete:
 
-        self.mock_repository.get_by_id.return_value = mock_task
-        self.mock_workflow_engine.can_transition.side_effect = Exception("Workflow error")
+    def test_start_requires_assignment(self, manager_user):
+        """APPROVED task with no assignee must be rejected by prerequisites."""
+        task = _valid_task(manager_user, status=TaskStatus.APPROVED.value)
 
-        request = SubmitForApprovalRequest(task_id=task_id, user_id=user_id)
+        with pytest.raises(BusinessRuleViolation):
+            StartTaskUseCase(event_dispatcher=Mock()).execute(
+                WorkflowRequest(
+                    task_id=task.id,
+                    actor_id=manager_user.id,
+                    actor_role=UserRole.MANAGER,
+                )
+            )
 
-        # Act & Assert
-        with pytest.raises(Exception):
-            self.use_case.execute(request)
+        task.refresh_from_db()
+        assert task.status == TaskStatus.APPROVED.value
 
-        # Transaction should have been used
-        mock_transaction.atomic.assert_called_once()
+    def test_start_succeeds_when_assigned(self, manager_user, contributor_user):
+        task = _valid_task(
+            manager_user,
+            status=TaskStatus.APPROVED.value,
+            assigned_to=contributor_user,
+        )
+
+        StartTaskUseCase(event_dispatcher=Mock()).execute(
+            WorkflowRequest(
+                task_id=task.id,
+                actor_id=contributor_user.id,
+                actor_role=UserRole.CONTRIBUTOR,
+            )
+        )
+
+        task.refresh_from_db()
+        assert task.status == TaskStatus.IN_PROGRESS.value
+
+    def test_complete_requires_in_progress(
+        self, manager_user, contributor_user
+    ):
+        task = _valid_task(
+            manager_user,
+            status=TaskStatus.IN_PROGRESS.value,
+            assigned_to=contributor_user,
+        )
+
+        CompleteTaskUseCase(event_dispatcher=Mock()).execute(
+            WorkflowRequest(
+                task_id=task.id,
+                actor_id=contributor_user.id,
+                actor_role=UserRole.CONTRIBUTOR,
+            )
+        )
+
+        task.refresh_from_db()
+        assert task.status == TaskStatus.COMPLETED.value

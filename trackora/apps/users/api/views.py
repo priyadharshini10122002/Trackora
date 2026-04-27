@@ -2,7 +2,7 @@
 API views for User management.
 """
 
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, serializers as drf_serializers
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -10,6 +10,12 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from drf_spectacular.utils import (
+    extend_schema,
+    OpenApiExample,
+    OpenApiResponse,
+    inline_serializer,
+)
 
 from apps.users.models import User, Role, UserRole
 from apps.users.api.serializers import (
@@ -30,6 +36,44 @@ from apps.users.api.permissions import (
 )
 
 
+# --------------------------------------------------------------------------
+# Inline response serializers for OpenAPI schema generation.
+# These don't change runtime behaviour - drf-spectacular uses them to render
+# accurate request/response shapes in Swagger UI for function-based views,
+# which otherwise wouldn't be introspectable.
+# --------------------------------------------------------------------------
+
+_RegisterResponseSerializer = inline_serializer(
+    name="RegisterResponse",
+    fields={
+        "user": UserProfileSerializer(),
+        "tokens": inline_serializer(
+            name="RegisterTokens",
+            fields={
+                "refresh": drf_serializers.CharField(),
+                "access": drf_serializers.CharField(),
+            },
+        ),
+        "message": drf_serializers.CharField(),
+    },
+)
+
+_LogoutRequestSerializer = inline_serializer(
+    name="LogoutRequest",
+    fields={"refresh_token": drf_serializers.CharField()},
+)
+
+_MessageResponseSerializer = inline_serializer(
+    name="MessageResponse",
+    fields={"message": drf_serializers.CharField()},
+)
+
+_ErrorResponseSerializer = inline_serializer(
+    name="ErrorResponse",
+    fields={"error": drf_serializers.CharField()},
+)
+
+
 class CustomTokenObtainPairView(TokenObtainPairView):
     """
     Custom JWT token view with additional user information.
@@ -37,6 +81,32 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
 
+@extend_schema(
+    tags=["Auth"],
+    summary="Register a new user",
+    description=(
+        "Creates a new user account and returns an access/refresh token pair "
+        "so the client can log in immediately without a separate login call."
+    ),
+    request=UserRegistrationSerializer,
+    responses={
+        201: _RegisterResponseSerializer,
+        400: _ErrorResponseSerializer,
+    },
+    examples=[
+        OpenApiExample(
+            "Valid registration",
+            value={
+                "email": "newuser@example.com",
+                "first_name": "New",
+                "last_name": "User",
+                "password": "StrongPass123!",
+                "password_confirm": "StrongPass123!",
+            },
+            request_only=True,
+        ),
+    ],
+)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register_user(request):
@@ -61,6 +131,27 @@ def register_user(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@extend_schema(
+    tags=["Auth"],
+    summary="Logout (blacklist refresh token)",
+    description=(
+        "Invalidates the supplied refresh token so it cannot be used to "
+        "obtain new access tokens. The client should also discard its "
+        "access token locally."
+    ),
+    request=_LogoutRequestSerializer,
+    responses={
+        200: _MessageResponseSerializer,
+        400: _ErrorResponseSerializer,
+    },
+    examples=[
+        OpenApiExample(
+            "Logout",
+            value={"refresh_token": "<jwt-refresh-token>"},
+            request_only=True,
+        ),
+    ],
+)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def logout_user(request):

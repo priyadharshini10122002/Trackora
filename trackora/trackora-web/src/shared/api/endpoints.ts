@@ -1,0 +1,32 @@
+export const ep = {
+  auth: {
+    register: '/auth/register/',
+    login: '/auth/login/',
+    refresh: '/auth/refresh/',
+    logout: '/auth/logout/',
+  },
+  tasks: {
+    list: '/tasks/',
+    detail: (id: string) => `/tasks/${id}/`,
+    stats: '/tasks/stats/',
+    history: (id: string) => `/tasks/${id}/history/`,
+    submit: (id: string) => `/tasks/${id}/submit_for_approval/`,
+    approve: (id: string) => `/tasks/${id}/approve/`,
+    reject: (id: string) => `/tasks/${id}/reject/`,
+    assign: (id: string) => `/tasks/${id}/assign/`,
+    start: (id: string) => `/tasks/${id}/start/`,
+    complete: (id: string) => `/tasks/${id}/complete/`,
+    close: (id: string) => `/tasks/${id}/close/`,
+  },
+  comments: '/comments/',
+  attachments: '/attachments/',
+  notifications: {
+    list: '/notifications/',
+    markRead: (id: string) => `/notifications/${id}/mark-read/`,
+    markAllRead: '/notifications/mark-all-read/',
+    preferences: '/notifications/preferences/',
+  },
+  users: '/users/',
+  roles: '/roles/',
+  userRoles: '/user-roles/',
+} as const;

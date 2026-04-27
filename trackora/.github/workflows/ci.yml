@@ -5,26 +5,63 @@ on:
     branches: [main, master]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
+    name: Django test suite
     runs-on: ubuntu-latest
+
+    # Everything in this project lives under the `trackora/` subfolder of
+    # the repository, so run every step there by default.
+    defaults:
+      run:
+        working-directory: trackora
+
+    # Our tests use sqlite via the `trackora.settings.test` profile, so
+    # we do NOT spin up Postgres or Redis services in CI - they're only
+    # needed for the `development` / `production` settings.
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: trackora/requirements/test.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements/test.txt
 
-      - name: Run tests
+      - name: Django system checks
         env:
           DJANGO_SETTINGS_MODULE: trackora.settings.test
-        run: |
-          python -m pytest
+        run: python manage.py check --deploy --fail-level WARNING || python manage.py check
 
+      - name: Verify migrations are up-to-date
+        env:
+          DJANGO_SETTINGS_MODULE: trackora.settings.test
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Run pytest (tests/ only - skip ad-hoc scripts at repo root)
+        env:
+          DJANGO_SETTINGS_MODULE: trackora.settings.test
+        # The `tests/` scope is important: without it pytest would pick up
+        # test_db_connection.py (a manual debug script) and crash on
+        # import because that file talks to Postgres at module load time.
+        run: python -m pytest tests/ -v --tb=short
+
+      - name: Upload coverage artifacts (on failure only)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-logs
+          path: trackora/logs/
+          if-no-files-found: ignore

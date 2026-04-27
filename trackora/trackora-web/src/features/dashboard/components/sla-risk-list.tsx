@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, AlertTriangle } from 'lucide-react';
 import { api } from '@/shared/api/client';
 import { ep } from '@/shared/api/endpoints';
 import type { Task, PaginatedResponse } from '@/shared/types/api';
@@ -10,9 +10,9 @@ import {
   CardHeader,
   CardTitle,
   CardContent,
-  Progress,
   Skeleton,
 } from '@/shared/ui';
+import { cn } from '@/shared/lib/cn';
 import { EmptyState } from '@/shared/components/empty-state';
 import { getPriorityConfig } from '@/shared/config/constants';
 import { dashboardKeys } from '../api/keys';
@@ -33,25 +33,30 @@ export function SLARiskList() {
     return data.results
       .filter(
         (t) =>
-          t.sla_hours !== null &&
+          t.sla_hours != null &&
           t.sla_hours > 0 &&
-          t.elapsed_hours / t.sla_hours > 0.8 &&
+          (t.elapsed_hours ?? 0) / t.sla_hours > 0.8 &&
           !t.is_sla_breached,
       )
       .sort(
         (a, b) =>
-          b.elapsed_hours / (b.sla_hours ?? 1) -
-          a.elapsed_hours / (a.sla_hours ?? 1),
+          (b.elapsed_hours ?? 0) / (b.sla_hours ?? 1) -
+          (a.elapsed_hours ?? 0) / (a.sla_hours ?? 1),
       )
       .slice(0, 5);
   }, [data]);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base font-semibold">SLA Risk</CardTitle>
+    <Card className="glass-subtle overflow-hidden">
+      <CardHeader className="flex flex-row items-center gap-3 border-b border-border/50 pb-4">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10">
+          <AlertTriangle className="h-4 w-4 text-amber-500" />
+        </div>
+        <CardTitle className="text-sm font-semibold tracking-tight">
+          SLA Risk
+        </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-4">
         {isLoading ? (
           <div className="space-y-4">
             {Array.from({ length: 3 }).map((_, i) => (
@@ -69,38 +74,64 @@ export function SLARiskList() {
             className="py-8"
           />
         ) : (
-          <ul className="space-y-4">
+          <ul className="space-y-3">
             {atRiskTasks.map((task) => {
               const pct = Math.round(
-                (task.elapsed_hours / (task.sla_hours ?? 1)) * 100,
+                ((task.elapsed_hours ?? 0) / (task.sla_hours ?? 1)) * 100,
               );
-              const tone = pct > 95 ? 'destructive' : 'warning';
+              const isCritical = pct > 95;
               const priority = getPriorityConfig(task.priority);
 
               return (
                 <li key={task.id}>
                   <Link
                     to={`/tasks/${task.id}`}
-                    className="block rounded-md -mx-2 px-2 py-2 hover:bg-muted/50 transition-colors"
+                    className={cn(
+                      'group block rounded-xl border px-4 py-3 transition-all duration-200 hover:shadow-md',
+                      isCritical
+                        ? 'border-red-200 bg-red-50/50 hover:border-red-300 dark:border-red-900/40 dark:bg-red-950/20'
+                        : 'border-amber-200 bg-amber-50/30 hover:border-amber-300 dark:border-amber-900/30 dark:bg-amber-950/10',
+                      isCritical && 'animate-pulse-glow',
+                    )}
                   >
-                    <div className="mb-1.5 flex items-center justify-between gap-3">
+                    <div className="mb-2 flex items-center justify-between gap-3">
                       <p className="min-w-0 truncate text-sm font-medium">
                         {task.title}
                       </p>
                       <div className="flex items-center gap-2 shrink-0">
                         <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${priority?.color ?? 'text-muted-foreground'}`}
+                          className={cn(
+                            'text-[11px] font-medium',
+                            priority?.color ?? 'text-muted-foreground',
+                          )}
                         >
                           {priority?.label ?? task.priority}
                         </span>
-                        <span className="text-xs font-semibold tabular-nums text-muted-foreground">
+                        <span
+                          className={cn(
+                            'rounded-full px-2 py-0.5 text-xs font-bold tabular-nums',
+                            isCritical
+                              ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
+                              : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400',
+                          )}
+                        >
                           {pct}%
                         </span>
                       </div>
                     </div>
-                    <Progress value={pct} tone={tone} className="h-1.5" />
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {task.elapsed_hours}h / {task.sla_hours}h SLA
+                    <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted/60">
+                      <div
+                        className={cn(
+                          'absolute inset-y-0 left-0 rounded-full transition-all duration-500',
+                          isCritical
+                            ? 'bg-gradient-to-r from-red-400 to-red-600'
+                            : 'bg-gradient-to-r from-amber-400 to-orange-500',
+                        )}
+                        style={{ width: `${Math.min(pct, 100)}%` }}
+                      />
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-muted-foreground">
+                      {task.elapsed_hours ?? 0}h / {task.sla_hours}h SLA
                     </p>
                   </Link>
                 </li>

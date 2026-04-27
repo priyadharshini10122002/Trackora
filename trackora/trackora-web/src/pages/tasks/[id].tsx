@@ -5,6 +5,7 @@ import {
   MessageSquare,
   Paperclip,
   History,
+  ChevronRight,
 } from 'lucide-react';
 import {
   Button,
@@ -25,6 +26,8 @@ import {
   HistoryTimeline,
   taskKeys,
 } from '@/features/tasks';
+import { CommentList, CommentComposer } from '@/features/comments';
+import { AttachmentList, AttachmentUploader } from '@/features/attachments';
 import type { TaskStatus } from '@/shared/types/api';
 import { toast } from 'sonner';
 import { ep } from '@/shared/api/endpoints';
@@ -97,7 +100,7 @@ function TaskDetailPage() {
 
   if (!task || error) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 animate-fade-in-up">
         <Button variant="ghost" size="sm" asChild className="-ml-2">
           <Link to="/tasks">
             <ArrowLeft className="mr-1 h-4 w-4" />
@@ -117,14 +120,29 @@ function TaskDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in-up">
+      {/* Premium breadcrumb navigation */}
+      <nav className="flex items-center gap-1.5 text-sm animate-fade-in-down">
+        <Link
+          to="/tasks"
+          className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors font-medium"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Tasks
+        </Link>
+        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />
+        <span className="text-foreground font-medium truncate max-w-[300px]">
+          {task.title}
+        </span>
+      </nav>
+
       <TaskDetailHeader task={task} onStatusChange={handleStatusChange} />
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main content */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
           <Tabs defaultValue="overview">
-            <TabsList>
+            <TabsList className="glass-subtle">
               <TabsTrigger value="overview">
                 <FileText className="mr-2 h-4 w-4" />
                 Overview
@@ -143,11 +161,11 @@ function TaskDetailPage() {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="overview" className="mt-4">
+            <TabsContent value="overview" className="mt-4 animate-fade-in">
               {task.description ? (
-                <Card>
+                <Card className="glass-subtle">
                   <CardContent className="p-6">
-                    <p className="whitespace-pre-wrap text-sm text-foreground">
+                    <p className="whitespace-pre-wrap text-sm text-foreground leading-relaxed">
                       {task.description}
                     </p>
                   </CardContent>
@@ -161,23 +179,21 @@ function TaskDetailPage() {
               )}
             </TabsContent>
 
-            <TabsContent value="comments" className="mt-4">
-              <Card>
-                <CardContent className="p-6 text-center text-sm text-muted-foreground">
-                  Comments coming soon
-                </CardContent>
-              </Card>
+            <TabsContent value="comments" className="mt-4 animate-fade-in">
+              <div className="space-y-4">
+                <CommentList taskId={id!} />
+                <CommentComposer taskId={id!} />
+              </div>
             </TabsContent>
 
-            <TabsContent value="attachments" className="mt-4">
-              <Card>
-                <CardContent className="p-6 text-center text-sm text-muted-foreground">
-                  Attachments coming soon
-                </CardContent>
-              </Card>
+            <TabsContent value="attachments" className="mt-4 animate-fade-in">
+              <div className="space-y-4">
+                <AttachmentUploader taskId={id!} />
+                <AttachmentList taskId={id!} />
+              </div>
             </TabsContent>
 
-            <TabsContent value="history" className="mt-4">
+            <TabsContent value="history" className="mt-4 animate-fade-in">
               <HistoryTimeline
                 history={history ?? []}
                 isLoading={isHistoryLoading}
@@ -187,7 +203,7 @@ function TaskDetailPage() {
         </div>
 
         {/* Sidebar */}
-        <div>
+        <div className="animate-fade-in-up" style={{ animationDelay: '200ms' }}>
           <TaskDetailSidebar task={task} />
         </div>
       </div>

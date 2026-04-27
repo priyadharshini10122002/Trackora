@@ -34,8 +34,24 @@ from apps.tasks.api.permissions import (
     CanAddAttachments,
     CanViewTaskHistory,
 )
+from apps.tasks.usecases import (
+    ApproveTaskUseCase,
+    AssignTaskRequest,
+    AssignTaskUseCase,
+    CloseTaskUseCase,
+    CompleteTaskUseCase,
+    RejectTaskUseCase,
+    StartTaskUseCase,
+    SubmitForApprovalUseCase,
+    WorkflowRequest,
+)
+from domain.events.domain_events import (
+    AttachmentAddedEvent,
+    CommentAddedEvent,
+    TaskCreatedEvent,
+    event_dispatcher,
+)
 from domain.value_objects.enums import TaskStatus, UserRole
-from domain.workflows.workflows import WorkflowEngine
 
 
 class TaskViewSet(viewsets.ModelViewSet):
@@ -71,9 +87,16 @@ class TaskViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def perform_create(self, serializer):
-        """Create task with current user as creator"""
+        """Create task with current user as creator, emit TaskCreatedEvent."""
         task = serializer.save(created_by=self.request.user)
         _invalidate_task_related_cache(task)
+        event_dispatcher.dispatch(
+            TaskCreatedEvent(
+                task_id=task.id,
+                created_by_id=self.request.user.id,
+                title=task.title,
+            )
+        )
 
     def get_queryset(self):
         """Filter tasks based on role-aware visibility."""
@@ -84,226 +107,122 @@ class TaskViewSet(viewsets.ModelViewSet):
             return queryset
         return queryset.filter(Q(created_by=user) | Q(assigned_to=user))
 
+    # ----------------------------------------------------------- Workflow actions
+    #
+    # Each workflow action is a thin adapter: build a use-case request from
+    # the HTTP request, execute the use case, and return the refreshed task.
+    # All state validation, prerequisite checking, history writing, cache
+    # invalidation and event dispatch live inside the use case, so this HTTP
+    # layer stays a translator between JSON and domain calls.
+
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CanApproveTask])
     def submit_for_approval(self, request, pk=None):
-        """Submit task for approval"""
+        """Submit task for approval (DRAFT -> PENDING_APPROVAL)."""
         task = self.get_object()
-
-        # Validate workflow transition
-        WorkflowEngine.validate_transition(
-            TaskStatus(task.status),
-            TaskStatus.PENDING_APPROVAL,
-            self._get_user_role()
+        SubmitForApprovalUseCase().execute(
+            WorkflowRequest(
+                task_id=task.id,
+                actor_id=request.user.id,
+                actor_role=self._get_user_role(),
+                reason=request.data.get('reason', ''),
+            )
         )
-
-        # Update status
-        old_status = task.status
-        task.status = TaskStatus.PENDING_APPROVAL.value
-        task.save(update_fields=['status', 'updated_at'])
-        _invalidate_task_related_cache(task)
-
-        # Create history record
-        TaskHistory.objects.create(
-            task=task,
-            old_status=old_status,
-            new_status=task.status,
-            changed_by=request.user,
-            reason=request.data.get('reason', 'Task submitted for approval'),
-        )
-
-        serializer = self.get_serializer(task)
-        return Response(serializer.data)
+        task.refresh_from_db()
+        return Response(self.get_serializer(task).data)
 
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CanApproveTask])
     def approve(self, request, pk=None):
-        """Approve a task"""
+        """Approve a task (PENDING_APPROVAL -> APPROVED)."""
         task = self.get_object()
-
-        # Validate workflow transition
-        WorkflowEngine.validate_transition(
-            TaskStatus(task.status),
-            TaskStatus.APPROVED,
-            self._get_user_role()
+        ApproveTaskUseCase().execute(
+            WorkflowRequest(
+                task_id=task.id,
+                actor_id=request.user.id,
+                actor_role=self._get_user_role(),
+                reason=request.data.get('reason', ''),
+            )
         )
-
-        # Update status
-        old_status = task.status
-        task.status = TaskStatus.APPROVED.value
-        task.save(update_fields=['status', 'updated_at'])
-        _invalidate_task_related_cache(task)
-
-        # Create history record
-        TaskHistory.objects.create(
-            task=task,
-            old_status=old_status,
-            new_status=task.status,
-            changed_by=request.user,
-            reason=request.data.get('reason', 'Task approved'),
-        )
-
-        serializer = self.get_serializer(task)
-        return Response(serializer.data)
+        task.refresh_from_db()
+        return Response(self.get_serializer(task).data)
 
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CanApproveTask])
     def reject(self, request, pk=None):
-        """Reject a task (return to draft)"""
+        """Reject a task (PENDING_APPROVAL -> DRAFT)."""
         task = self.get_object()
-
-        # Validate workflow transition
-        WorkflowEngine.validate_transition(
-            TaskStatus(task.status),
-            TaskStatus.DRAFT,
-            self._get_user_role()
+        RejectTaskUseCase().execute(
+            WorkflowRequest(
+                task_id=task.id,
+                actor_id=request.user.id,
+                actor_role=self._get_user_role(),
+                reason=request.data.get('reason', ''),
+            )
         )
-
-        # Update status
-        old_status = task.status
-        task.status = TaskStatus.DRAFT.value
-        task.save(update_fields=['status', 'updated_at'])
-        _invalidate_task_related_cache(task)
-
-        # Create history record
-        TaskHistory.objects.create(
-            task=task,
-            old_status=old_status,
-            new_status=task.status,
-            changed_by=request.user,
-            reason=request.data.get('reason', 'Task rejected'),
-        )
-
-        serializer = self.get_serializer(task)
-        return Response(serializer.data)
+        task.refresh_from_db()
+        return Response(self.get_serializer(task).data)
 
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CanAssignTask])
     def assign(self, request, pk=None):
-        """Assign task to user"""
+        """Assign task to user."""
         task = self.get_object()
         serializer = TaskAssignmentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        # Update assignment
-        old_assigned = task.assigned_to
-        task.assigned_to_id = serializer.validated_data['assigned_to_id']
-        task.save(update_fields=['assigned_to', 'updated_at'])
-        _invalidate_task_related_cache(task)
-
-        # Create assignment record
-        Assignment.objects.create(
-            task=task,
-            assigned_to_id=serializer.validated_data['assigned_to_id'],
-            assigned_by=request.user,
-            notes=serializer.validated_data.get('notes', ''),
-        )
-
-        # Create history record if status changed
-        if not old_assigned:
-            TaskHistory.objects.create(
-                task=task,
-                old_status=task.status,
-                new_status=task.status,
-                changed_by=request.user,
-                reason=f"Task assigned to user {task.assigned_to.get_full_name()}",
+        AssignTaskUseCase().execute(
+            AssignTaskRequest(
+                task_id=task.id,
+                assigned_to_id=serializer.validated_data['assigned_to_id'],
+                assigned_by_id=request.user.id,
+                actor_role=self._get_user_role(),
+                notes=serializer.validated_data.get('notes', ''),
             )
-
-        task_serializer = self.get_serializer(task)
-        return Response(task_serializer.data)
+        )
+        task.refresh_from_db()
+        return Response(self.get_serializer(task).data)
 
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CanEditTask])
     def start(self, request, pk=None):
-        """Start working on task"""
+        """Start working on task (APPROVED -> IN_PROGRESS)."""
         task = self.get_object()
-
-        # Validate task is assigned
-        if not task.assigned_to:
-            return Response(
-                {'error': 'Task must be assigned before it can be started'},
-                status=status.HTTP_400_BAD_REQUEST
+        StartTaskUseCase().execute(
+            WorkflowRequest(
+                task_id=task.id,
+                actor_id=request.user.id,
+                actor_role=self._get_user_role(),
+                reason=request.data.get('reason', ''),
             )
-
-        # Validate workflow transition
-        WorkflowEngine.validate_transition(
-            TaskStatus(task.status),
-            TaskStatus.IN_PROGRESS,
-            self._get_user_role()
         )
-
-        # Update status
-        old_status = task.status
-        task.status = TaskStatus.IN_PROGRESS.value
-        task.save(update_fields=['status', 'updated_at'])
-        _invalidate_task_related_cache(task)
-
-        # Create history record
-        TaskHistory.objects.create(
-            task=task,
-            old_status=old_status,
-            new_status=task.status,
-            changed_by=request.user,
-            reason='Task started',
-        )
-
-        serializer = self.get_serializer(task)
-        return Response(serializer.data)
+        task.refresh_from_db()
+        return Response(self.get_serializer(task).data)
 
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CanEditTask])
     def complete(self, request, pk=None):
-        """Mark task as completed"""
+        """Mark task as completed (IN_PROGRESS -> COMPLETED)."""
         task = self.get_object()
-
-        # Validate workflow transition
-        WorkflowEngine.validate_transition(
-            TaskStatus(task.status),
-            TaskStatus.COMPLETED,
-            self._get_user_role()
+        CompleteTaskUseCase().execute(
+            WorkflowRequest(
+                task_id=task.id,
+                actor_id=request.user.id,
+                actor_role=self._get_user_role(),
+                reason=request.data.get('reason', ''),
+            )
         )
-
-        # Update status
-        old_status = task.status
-        task.status = TaskStatus.COMPLETED.value
-        task.save(update_fields=['status', 'updated_at'])
-        _invalidate_task_related_cache(task)
-
-        # Create history record
-        TaskHistory.objects.create(
-            task=task,
-            old_status=old_status,
-            new_status=task.status,
-            changed_by=request.user,
-            reason='Task completed',
-        )
-
-        serializer = self.get_serializer(task)
-        return Response(serializer.data)
+        task.refresh_from_db()
+        return Response(self.get_serializer(task).data)
 
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, CanCloseTask])
     def close(self, request, pk=None):
-        """Close a completed task"""
+        """Close a completed task (COMPLETED -> CLOSED)."""
         task = self.get_object()
-
-        # Validate workflow transition
-        WorkflowEngine.validate_transition(
-            TaskStatus(task.status),
-            TaskStatus.CLOSED,
-            self._get_user_role()
+        CloseTaskUseCase().execute(
+            WorkflowRequest(
+                task_id=task.id,
+                actor_id=request.user.id,
+                actor_role=self._get_user_role(),
+                reason=request.data.get('reason', ''),
+            )
         )
-
-        # Update status
-        old_status = task.status
-        task.status = TaskStatus.CLOSED.value
-        task.save(update_fields=['status', 'updated_at'])
-        _invalidate_task_related_cache(task)
-
-        # Create history record
-        TaskHistory.objects.create(
-            task=task,
-            old_status=old_status,
-            new_status=task.status,
-            changed_by=request.user,
-            reason='Task closed',
-        )
-
-        serializer = self.get_serializer(task)
-        return Response(serializer.data)
+        task.refresh_from_db()
+        return Response(self.get_serializer(task).data)
 
     @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated, CanViewTaskHistory])
     def history(self, request, pk=None):
@@ -388,7 +307,15 @@ class CommentViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied('Only managers or admins can create internal comments.')
         if not _can_access_task(self.request.user, task):
             raise PermissionDenied('You do not have permission to comment on this task.')
-        serializer.save(task=task, author=self.request.user)
+        comment = serializer.save(task=task, author=self.request.user)
+        event_dispatcher.dispatch(
+            CommentAddedEvent(
+                task_id=task.id,
+                comment_id=comment.id,
+                author_id=self.request.user.id,
+                is_internal=comment.is_internal,
+            )
+        )
 
 
 class AttachmentViewSet(viewsets.ModelViewSet):
@@ -417,7 +344,15 @@ class AttachmentViewSet(viewsets.ModelViewSet):
             raise ValidationError({'task': 'Task ID is required.'})
         if not _can_access_task(self.request.user, task):
             raise PermissionDenied('You do not have permission to upload attachments for this task.')
-        serializer.save(task=task, uploaded_by=self.request.user)
+        attachment = serializer.save(task=task, uploaded_by=self.request.user)
+        event_dispatcher.dispatch(
+            AttachmentAddedEvent(
+                task_id=task.id,
+                attachment_id=attachment.id,
+                uploaded_by_id=self.request.user.id,
+                filename=getattr(attachment, 'filename', '') or getattr(attachment.file, 'name', ''),
+            )
+        )
 
 
 def _can_access_task(user, task):

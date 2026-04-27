@@ -22,7 +22,7 @@ export {
 
 // Components
 export { TaskTable } from './components/task-table';
-export { TaskFilters } from './components/task-filters';
+export { TaskFilters as TaskFiltersBar } from './components/task-filters';
 export { StatusBadge } from './components/status-badge';
 export { PriorityBadge } from './components/priority-badge';
 export { TaskForm } from './components/task-form';

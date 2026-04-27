@@ -20,7 +20,7 @@ class TestTaskEntity:
 
         task = TaskEntity(
             id=task_id,
-            title="Test Task",
+            title="Valid Title Length Here",  # 10+ chars to pass validator
             description="Test description",
             priority=TaskPriority.HIGH,
             status=TaskStatus.DRAFT,
@@ -34,7 +34,7 @@ class TestTaskEntity:
         )
 
         assert task.id == task_id
-        assert task.title == "Test Task"
+        assert task.title == "Valid Title Length Here"
         assert task.priority == TaskPriority.HIGH
         assert task.status == TaskStatus.DRAFT
         assert task.sla_hours == 24
@@ -46,7 +46,7 @@ class TestTaskEntity:
         creator_id = uuid.uuid4()
         due_date = datetime.now() + timedelta(days=7)
 
-        with pytest.raises(ValueError, match="Title must be between 10 and 150 characters"):
+        with pytest.raises(ValueError, match="title must be between 10 and 150 characters"):
             TaskEntity(
                 id=task_id,
                 title="Short",  # Too short

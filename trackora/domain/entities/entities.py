@@ -3,10 +3,18 @@ Domain entities for Trackora.
 Pure Python business objects representing core concepts.
 """
 
+import re
 import uuid
 from datetime import datetime
 from typing import Optional, List
 from domain.value_objects.enums import TaskStatus, TaskPriority, UserRole
+
+
+# Lightweight RFC-ish email shape check. Not meant to be comprehensive -
+# the authoritative validation happens at the DRF serializer layer with
+# Django's EmailValidator. This is just enough to enforce the "looks like
+# an email" invariant for the pure-domain UserEntity.
+_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 
 class BaseEntity:
@@ -63,15 +71,19 @@ class TaskEntity(BaseEntity):
         self._validate()
 
     def _validate(self):
-        """Validate entity invariants"""
+        """Validate entity invariants."""
         if len(self.title) < 10 or len(self.title) > 150:
             raise ValueError("Task title must be between 10 and 150 characters")
 
         if self.sla_hours <= 0:
             raise ValueError("SLA hours must be positive")
 
-        if self.due_date and self.due_date <= datetime.now():
-            raise ValueError("Due date must be in the future")
+        # NB: past due_date is intentionally *not* rejected here. Users
+        # sometimes backfill tasks (e.g. logging work that was actually
+        # completed yesterday), and the "due in the future" rule belongs
+        # in the create-path business logic / serializer, not in the
+        # entity invariant. Keeping the entity permissive lets us reload
+        # historical rows from the DB without crashing the constructor.
 
     def can_be_assigned_by(self, user_role: UserRole) -> bool:
         """Check if user can assign this task"""
@@ -146,6 +158,12 @@ class CommentEntity(BaseEntity):
         self.author_id = author_id
         self.content = content
         self.is_internal = is_internal
+        self._validate()
+
+    def _validate(self):
+        """Validate entity invariants."""
+        if not self.content or not self.content.strip():
+            raise ValueError("Comment content cannot be empty")
 
     def can_be_viewed_by(self, user_role: UserRole) -> bool:
         """Check if user can view this comment"""
@@ -170,6 +188,14 @@ class UserEntity(BaseEntity):
         self.first_name = first_name
         self.last_name = last_name
         self.roles = roles or []
+        self._validate()
+
+    def _validate(self):
+        """Validate entity invariants."""
+        # Only validate non-empty emails so that default/empty UserEntity
+        # (e.g. used as placeholders in tests) doesn't blow up.
+        if self.email and not _EMAIL_RE.match(self.email):
+            raise ValueError(f"Invalid email format: {self.email!r}")
 
     def has_role(self, role: UserRole) -> bool:
         """Check if user has specific role"""

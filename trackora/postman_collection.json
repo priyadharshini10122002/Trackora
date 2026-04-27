@@ -1,226 +1,535 @@
 {
   "info": {
-    "name": "Trackora API",
-    "_postman_id": "6d8db4aa-b7ec-45ec-985c-99322f4f5b57",
-    "description": "Trackora API collection",
+    "name": "Trackora API - Full",
+    "description": "Complete Trackora REST API collection.\n\n## Setup\n1. Import this collection into Postman.\n2. The `base_url` variable defaults to http://localhost:8000. Change it if your server runs elsewhere.\n3. Start by calling **Auth > Login (Admin)** (or any of the role-specific logins). Its test script auto-saves `access_token` and `refresh_token` into collection variables. All subsequent requests use `{{access_token}}` in the Authorization header.\n4. To test as a different role (Manager/Contributor/Viewer), run the corresponding login request; the token is updated.\n\n## Seeded users (password in parentheses)\n- admin@trackora.com (Admin123!) - ADMIN\n- manager@trackora.com (Manager123!) - MANAGER\n- john@trackora.com (John123!) - CONTRIBUTOR\n- jane@trackora.com (Jane123!) - CONTRIBUTOR\n- viewer@trackora.com (Viewer123!) - VIEWER\n\n## Variables captured automatically\n- `access_token`, `refresh_token` - from Login\n- `user_id` - from Users - List (first result)\n- `task_id` - from Tasks - List (first result)\n- `role_id` - from Roles - List (first result)\n- `notification_id` - from Notifications - List (first result)\n- `comment_id` - from Comments - List (first result)\n- `attachment_id` - from Attachments - List (first result)\n\nYou can manually override any of these in the Variables tab.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]
+  },
+  "variable": [
+    {"key": "base_url", "value": "http://localhost:8000"},
+    {"key": "access_token", "value": ""},
+    {"key": "refresh_token", "value": ""},
+    {"key": "user_id", "value": ""},
+    {"key": "task_id", "value": ""},
+    {"key": "role_id", "value": ""},
+    {"key": "notification_id", "value": ""},
+    {"key": "comment_id", "value": ""},
+    {"key": "attachment_id", "value": ""}
+  ],
   "item": [
     {
-      "name": "Auth - Register",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"email\": \"manager@example.com\",\n  \"first_name\": \"Manager\",\n  \"last_name\": \"User\",\n  \"password\": \"StrongPass123!\",\n  \"password_confirm\": \"StrongPass123!\"\n}"
-        },
-        "url": {
-          "raw": "{{base_url}}/api/auth/register/",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "api",
-            "auth",
-            "register",
-            ""
-          ]
-        }
-      }
-    },
-    {
-      "name": "Auth - Login",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"email\": \"manager@example.com\",\n  \"password\": \"StrongPass123!\"\n}"
-        },
-        "url": {
-          "raw": "{{base_url}}/api/auth/login/",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "api",
-            "auth",
-            "login",
-            ""
-          ]
-        }
-      }
-    },
-    {
-      "name": "Auth - Refresh",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"
-        },
-        "url": {
-          "raw": "{{base_url}}/api/auth/refresh/",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "api",
-            "auth",
-            "refresh",
-            ""
-          ]
-        }
-      }
-    },
-    {
-      "name": "Tasks - List",
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}"
-          }
-        ],
-        "url": {
-          "raw": "{{base_url}}/api/tasks/",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "api",
-            "tasks",
-            ""
-          ]
-        }
-      }
-    },
-    {
-      "name": "Tasks - Create",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}"
+      "name": "01 - Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"newuser@example.com\",\n  \"first_name\": \"New\",\n  \"last_name\": \"User\",\n  \"password\": \"StrongPass123!\",\n  \"password_confirm\": \"StrongPass123!\"\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/auth/register/", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "register", ""]}
           },
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"title\": \"Complete deployment automation\",\n  \"description\": \"Prepare production infrastructure rollout\",\n  \"priority\": \"HIGH\",\n  \"due_date\": \"2026-12-31T23:59:00Z\",\n  \"sla_hours\": 48\n}"
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["if (pm.response.code === 201) {", "  const j = pm.response.json();", "  pm.collectionVariables.set('access_token', j.tokens.access);", "  pm.collectionVariables.set('refresh_token', j.tokens.refresh);", "  console.log('Tokens saved.');", "}"]}}]
         },
-        "url": {
-          "raw": "{{base_url}}/api/tasks/",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "api",
-            "tasks",
-            ""
-          ]
-        }
-      }
-    },
-    {
-      "name": "Tasks - Stats",
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}"
+        {
+          "name": "Login (Admin)",
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"admin@trackora.com\",\n  \"password\": \"Admin123!\"\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/auth/login/", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "login", ""]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["if (pm.response.code === 200) {", "  const j = pm.response.json();", "  pm.collectionVariables.set('access_token', j.access);", "  pm.collectionVariables.set('refresh_token', j.refresh);", "  console.log('Logged in as', j.user && j.user.email);", "}"]}}]
+        },
+        {
+          "name": "Login (Manager)",
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"manager@trackora.com\",\n  \"password\": \"Manager123!\"\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/auth/login/", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "login", ""]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["if (pm.response.code === 200) {", "  const j = pm.response.json();", "  pm.collectionVariables.set('access_token', j.access);", "  pm.collectionVariables.set('refresh_token', j.refresh);", "}"]}}]
+        },
+        {
+          "name": "Login (Contributor - John)",
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"john@trackora.com\",\n  \"password\": \"John123!\"\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/auth/login/", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "login", ""]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["if (pm.response.code === 200) {", "  const j = pm.response.json();", "  pm.collectionVariables.set('access_token', j.access);", "  pm.collectionVariables.set('refresh_token', j.refresh);", "}"]}}]
+        },
+        {
+          "name": "Login (Viewer)",
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"viewer@trackora.com\",\n  \"password\": \"Viewer123!\"\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/auth/login/", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "login", ""]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["if (pm.response.code === 200) {", "  const j = pm.response.json();", "  pm.collectionVariables.set('access_token', j.access);", "  pm.collectionVariables.set('refresh_token', j.refresh);", "}"]}}]
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/auth/refresh/", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "refresh", ""]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["if (pm.response.code === 200) {", "  const j = pm.response.json();", "  pm.collectionVariables.set('access_token', j.access);", "  if (j.refresh) pm.collectionVariables.set('refresh_token', j.refresh);", "}"]}}]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/auth/logout/", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "logout", ""]}
           }
-        ],
-        "url": {
-          "raw": "{{base_url}}/api/tasks/stats/",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "api",
-            "tasks",
-            "stats",
-            ""
-          ]
         }
-      }
+      ]
     },
     {
-      "name": "Notifications - List",
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Authorization",
-            "value": "Bearer {{access_token}}"
+      "name": "02 - Users",
+      "item": [
+        {
+          "name": "Me (current user)",
+          "request": {"method": "GET", "url": {"raw": "{{base_url}}/api/v1/users/me/", "host": ["{{base_url}}"], "path": ["api", "v1", "users", "me", ""]}}
+        },
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/?page=1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "users", ""],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "is_active", "value": "true", "disabled": true},
+                {"key": "search", "value": "john", "disabled": true},
+                {"key": "ordering", "value": "-date_joined", "disabled": true}
+              ]
+            }
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["if (pm.response.code === 200) {", "  const j = pm.response.json();", "  const list = j.results || j;", "  if (list[0]) pm.collectionVariables.set('user_id', list[0].id);", "}"]}}]
+        },
+        {
+          "name": "Retrieve User",
+          "request": {"method": "GET", "url": {"raw": "{{base_url}}/api/v1/users/{{user_id}}/", "host": ["{{base_url}}"], "path": ["api", "v1", "users", "{{user_id}}", ""]}}
+        },
+        {
+          "name": "Create User (Admin only)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"created@trackora.com\",\n  \"first_name\": \"Created\",\n  \"last_name\": \"User\",\n  \"is_active\": true\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/users/", "host": ["{{base_url}}"], "path": ["api", "v1", "users", ""]}
           }
-        ],
-        "url": {
-          "raw": "{{base_url}}/api/notifications/",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "api",
-            "notifications",
-            ""
-          ]
+        },
+        {
+          "name": "Update User (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"first_name\": \"Updated\",\n  \"last_name\": \"Name\"\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/users/{{user_id}}/", "host": ["{{base_url}}"], "path": ["api", "v1", "users", "{{user_id}}", ""]}
+          }
+        },
+        {
+          "name": "Delete User (Admin only)",
+          "request": {"method": "DELETE", "url": {"raw": "{{base_url}}/api/v1/users/{{user_id}}/", "host": ["{{base_url}}"], "path": ["api", "v1", "users", "{{user_id}}", ""]}}
+        },
+        {
+          "name": "Update My Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"first_name\": \"NewFirst\",\n  \"last_name\": \"NewLast\"\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/users/update_profile/", "host": ["{{base_url}}"], "path": ["api", "v1", "users", "update_profile", ""]}
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"old_password\": \"Admin123!\",\n  \"new_password\": \"NewStrongPass123!\",\n  \"new_password_confirm\": \"NewStrongPass123!\"\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/users/change_password/", "host": ["{{base_url}}"], "path": ["api", "v1", "users", "change_password", ""]}
+          }
+        },
+        {
+          "name": "Deactivate User",
+          "request": {"method": "POST", "url": {"raw": "{{base_url}}/api/v1/users/{{user_id}}/deactivate/", "host": ["{{base_url}}"], "path": ["api", "v1", "users", "{{user_id}}", "deactivate", ""]}}
+        },
+        {
+          "name": "Activate User",
+          "request": {"method": "POST", "url": {"raw": "{{base_url}}/api/v1/users/{{user_id}}/activate/", "host": ["{{base_url}}"], "path": ["api", "v1", "users", "{{user_id}}", "activate", ""]}}
         }
-      }
+      ]
     },
     {
-      "name": "Health - App",
-      "request": {
-        "method": "GET",
-        "url": {
-          "raw": "{{base_url}}/health/",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "health",
-            ""
-          ]
+      "name": "03 - Roles",
+      "item": [
+        {
+          "name": "List Roles",
+          "request": {"method": "GET", "url": {"raw": "{{base_url}}/api/v1/roles/", "host": ["{{base_url}}"], "path": ["api", "v1", "roles", ""]}},
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["if (pm.response.code === 200) {", "  const j = pm.response.json();", "  const list = j.results || j;", "  if (list[0]) pm.collectionVariables.set('role_id', list[0].id);", "}"]}}]
+        },
+        {
+          "name": "Retrieve Role",
+          "request": {"method": "GET", "url": {"raw": "{{base_url}}/api/v1/roles/{{role_id}}/", "host": ["{{base_url}}"], "path": ["api", "v1", "roles", "{{role_id}}", ""]}}
+        },
+        {
+          "name": "List User-Role Assignments",
+          "request": {"method": "GET", "url": {"raw": "{{base_url}}/api/v1/user-roles/", "host": ["{{base_url}}"], "path": ["api", "v1", "user-roles", ""]}}
+        },
+        {
+          "name": "Assign Role by Name",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"user_id\": \"{{user_id}}\",\n  \"role_name\": \"CONTRIBUTOR\"\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/user-roles/assign_role/", "host": ["{{base_url}}"], "path": ["api", "v1", "user-roles", "assign_role", ""]}
+          }
+        },
+        {
+          "name": "Create User-Role (direct)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"user\": \"{{user_id}}\",\n  \"role\": \"{{role_id}}\"\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/user-roles/", "host": ["{{base_url}}"], "path": ["api", "v1", "user-roles", ""]}
+          }
+        },
+        {
+          "name": "Revoke User-Role",
+          "request": {"method": "DELETE", "url": {"raw": "{{base_url}}/api/v1/user-roles/{{role_id}}/revoke_role/", "host": ["{{base_url}}"], "path": ["api", "v1", "user-roles", "{{role_id}}", "revoke_role", ""]}}
         }
-      }
-    }
-  ],
-  "variable": [
-    {
-      "key": "base_url",
-      "value": "http://localhost:8000"
+      ]
     },
     {
-      "key": "access_token",
-      "value": ""
+      "name": "04 - Tasks (CRUD)",
+      "item": [
+        {
+          "name": "List Tasks",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/tasks/?page=1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "tasks", ""],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "status", "value": "IN_PROGRESS", "disabled": true},
+                {"key": "priority", "value": "HIGH", "disabled": true},
+                {"key": "assigned_to", "value": "{{user_id}}", "disabled": true},
+                {"key": "created_by", "value": "{{user_id}}", "disabled": true},
+                {"key": "search", "value": "redis", "disabled": true},
+                {"key": "ordering", "value": "-due_date", "disabled": true}
+              ]
+            }
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["if (pm.response.code === 200) {", "  const j = pm.response.json();", "  const list = j.results || j;", "  if (list[0]) pm.collectionVariables.set('task_id', list[0].id);", "}"]}}]
+        },
+        {
+          "name": "Create Task",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"title\": \"My new test task from Postman\",\n  \"description\": \"This is a detailed description of the task\",\n  \"priority\": \"HIGH\",\n  \"due_date\": \"2026-12-31T23:59:59Z\",\n  \"sla_hours\": 48\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/tasks/", "host": ["{{base_url}}"], "path": ["api", "v1", "tasks", ""]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["if (pm.response.code === 201) {", "  const j = pm.response.json();", "  pm.collectionVariables.set('task_id', j.id);", "}"]}}]
+        },
+        {
+          "name": "Retrieve Task",
+          "request": {"method": "GET", "url": {"raw": "{{base_url}}/api/v1/tasks/{{task_id}}/", "host": ["{{base_url}}"], "path": ["api", "v1", "tasks", "{{task_id}}", ""]}}
+        },
+        {
+          "name": "Update Task (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"title\": \"Updated task title\",\n  \"priority\": \"MEDIUM\"\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/tasks/{{task_id}}/", "host": ["{{base_url}}"], "path": ["api", "v1", "tasks", "{{task_id}}", ""]}
+          }
+        },
+        {
+          "name": "Delete Task",
+          "request": {"method": "DELETE", "url": {"raw": "{{base_url}}/api/v1/tasks/{{task_id}}/", "host": ["{{base_url}}"], "path": ["api", "v1", "tasks", "{{task_id}}", ""]}}
+        },
+        {
+          "name": "Task Stats",
+          "request": {"method": "GET", "url": {"raw": "{{base_url}}/api/v1/tasks/stats/", "host": ["{{base_url}}"], "path": ["api", "v1", "tasks", "stats", ""]}}
+        },
+        {
+          "name": "Task History",
+          "request": {"method": "GET", "url": {"raw": "{{base_url}}/api/v1/tasks/{{task_id}}/history/", "host": ["{{base_url}}"], "path": ["api", "v1", "tasks", "{{task_id}}", "history", ""]}}
+        }
+      ]
     },
     {
-      "key": "refresh_token",
-      "value": ""
+      "name": "05 - Tasks (Workflow)",
+      "item": [
+        {
+          "name": "Submit for Approval",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"reason\": \"Ready for manager review\"\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/tasks/{{task_id}}/submit_for_approval/", "host": ["{{base_url}}"], "path": ["api", "v1", "tasks", "{{task_id}}", "submit_for_approval", ""]}
+          }
+        },
+        {
+          "name": "Approve",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"reason\": \"Approved by manager\"\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/tasks/{{task_id}}/approve/", "host": ["{{base_url}}"], "path": ["api", "v1", "tasks", "{{task_id}}", "approve", ""]}
+          }
+        },
+        {
+          "name": "Reject",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"reason\": \"Needs more details\"\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/tasks/{{task_id}}/reject/", "host": ["{{base_url}}"], "path": ["api", "v1", "tasks", "{{task_id}}", "reject", ""]}
+          }
+        },
+        {
+          "name": "Assign",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"assigned_to_id\": \"{{user_id}}\",\n  \"notes\": \"Please complete by end of week\"\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/tasks/{{task_id}}/assign/", "host": ["{{base_url}}"], "path": ["api", "v1", "tasks", "{{task_id}}", "assign", ""]}
+          }
+        },
+        {
+          "name": "Start",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{}"},
+            "url": {"raw": "{{base_url}}/api/v1/tasks/{{task_id}}/start/", "host": ["{{base_url}}"], "path": ["api", "v1", "tasks", "{{task_id}}", "start", ""]}
+          }
+        },
+        {
+          "name": "Complete",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{}"},
+            "url": {"raw": "{{base_url}}/api/v1/tasks/{{task_id}}/complete/", "host": ["{{base_url}}"], "path": ["api", "v1", "tasks", "{{task_id}}", "complete", ""]}
+          }
+        },
+        {
+          "name": "Close",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{}"},
+            "url": {"raw": "{{base_url}}/api/v1/tasks/{{task_id}}/close/", "host": ["{{base_url}}"], "path": ["api", "v1", "tasks", "{{task_id}}", "close", ""]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Comments",
+      "item": [
+        {
+          "name": "List Comments",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/comments/?task={{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "comments", ""],
+              "query": [{"key": "task", "value": "{{task_id}}"}]
+            }
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["if (pm.response.code === 200) {", "  const j = pm.response.json();", "  const list = j.results || j;", "  if (list[0]) pm.collectionVariables.set('comment_id', list[0].id);", "}"]}}]
+        },
+        {
+          "name": "Create Comment (public)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"task\": \"{{task_id}}\",\n  \"content\": \"This is a public comment from Postman\",\n  \"is_internal\": false\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/comments/", "host": ["{{base_url}}"], "path": ["api", "v1", "comments", ""]}
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["if (pm.response.code === 201) {", "  pm.collectionVariables.set('comment_id', pm.response.json().id);", "}"]}}]
+        },
+        {
+          "name": "Create Internal Comment (Manager/Admin)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"task\": \"{{task_id}}\",\n  \"content\": \"Internal manager-only note\",\n  \"is_internal\": true\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/comments/", "host": ["{{base_url}}"], "path": ["api", "v1", "comments", ""]}
+          }
+        },
+        {
+          "name": "Retrieve Comment",
+          "request": {"method": "GET", "url": {"raw": "{{base_url}}/api/v1/comments/{{comment_id}}/", "host": ["{{base_url}}"], "path": ["api", "v1", "comments", "{{comment_id}}", ""]}}
+        },
+        {
+          "name": "Update Comment",
+          "request": {
+            "method": "PATCH",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"content\": \"Edited comment content\"\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/comments/{{comment_id}}/", "host": ["{{base_url}}"], "path": ["api", "v1", "comments", "{{comment_id}}", ""]}
+          }
+        },
+        {
+          "name": "Delete Comment",
+          "request": {"method": "DELETE", "url": {"raw": "{{base_url}}/api/v1/comments/{{comment_id}}/", "host": ["{{base_url}}"], "path": ["api", "v1", "comments", "{{comment_id}}", ""]}}
+        }
+      ]
+    },
+    {
+      "name": "07 - Attachments",
+      "item": [
+        {
+          "name": "List Attachments",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/attachments/?task={{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "attachments", ""],
+              "query": [{"key": "task", "value": "{{task_id}}"}]
+            }
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["if (pm.response.code === 200) {", "  const j = pm.response.json();", "  const list = j.results || j;", "  if (list[0]) pm.collectionVariables.set('attachment_id', list[0].id);", "}"]}}]
+        },
+        {
+          "name": "Upload Attachment (multipart)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {"key": "task", "value": "{{task_id}}", "type": "text"},
+                {"key": "file", "type": "file", "src": [], "description": "Select a file (pdf, docx, xlsx, png, jpg, jpeg, txt up to 10MB)"}
+              ]
+            },
+            "url": {"raw": "{{base_url}}/api/v1/attachments/", "host": ["{{base_url}}"], "path": ["api", "v1", "attachments", ""]}
+          }
+        },
+        {
+          "name": "Retrieve Attachment",
+          "request": {"method": "GET", "url": {"raw": "{{base_url}}/api/v1/attachments/{{attachment_id}}/", "host": ["{{base_url}}"], "path": ["api", "v1", "attachments", "{{attachment_id}}", ""]}}
+        },
+        {
+          "name": "Delete Attachment",
+          "request": {"method": "DELETE", "url": {"raw": "{{base_url}}/api/v1/attachments/{{attachment_id}}/", "host": ["{{base_url}}"], "path": ["api", "v1", "attachments", "{{attachment_id}}", ""]}}
+        }
+      ]
+    },
+    {
+      "name": "08 - Notifications",
+      "item": [
+        {
+          "name": "List Notifications",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/notifications/?page=1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "notifications", ""],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "is_read", "value": "false", "disabled": true},
+                {"key": "notification_type", "value": "TASK_ASSIGNED", "disabled": true},
+                {"key": "priority", "value": "HIGH", "disabled": true},
+                {"key": "task", "value": "{{task_id}}", "disabled": true},
+                {"key": "search", "value": "assigned", "disabled": true}
+              ]
+            }
+          },
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["if (pm.response.code === 200) {", "  const j = pm.response.json();", "  const list = j.results || j;", "  if (list[0]) pm.collectionVariables.set('notification_id', list[0].id);", "}"]}}]
+        },
+        {
+          "name": "Retrieve Notification",
+          "request": {"method": "GET", "url": {"raw": "{{base_url}}/api/v1/notifications/{{notification_id}}/", "host": ["{{base_url}}"], "path": ["api", "v1", "notifications", "{{notification_id}}", ""]}}
+        },
+        {
+          "name": "Unread Count",
+          "request": {"method": "GET", "url": {"raw": "{{base_url}}/api/v1/notifications/unread-count/", "host": ["{{base_url}}"], "path": ["api", "v1", "notifications", "unread-count", ""]}}
+        },
+        {
+          "name": "Mark One Read",
+          "request": {"method": "POST", "url": {"raw": "{{base_url}}/api/v1/notifications/{{notification_id}}/mark-read/", "host": ["{{base_url}}"], "path": ["api", "v1", "notifications", "{{notification_id}}", "mark-read", ""]}}
+        },
+        {
+          "name": "Mark Multiple Read",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"notification_ids\": [\"{{notification_id}}\"]\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/notifications/mark-read/", "host": ["{{base_url}}"], "path": ["api", "v1", "notifications", "mark-read", ""]}
+          }
+        },
+        {
+          "name": "Mark All Read",
+          "request": {"method": "POST", "url": {"raw": "{{base_url}}/api/v1/notifications/mark-all-read/", "host": ["{{base_url}}"], "path": ["api", "v1", "notifications", "mark-all-read", ""]}}
+        },
+        {
+          "name": "Get Preferences",
+          "request": {"method": "GET", "url": {"raw": "{{base_url}}/api/v1/notification-preferences/", "host": ["{{base_url}}"], "path": ["api", "v1", "notification-preferences", ""]}}
+        },
+        {
+          "name": "Update Preferences",
+          "request": {
+            "method": "PATCH",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"task_assigned\": true,\n  \"task_due_soon\": true,\n  \"task_overdue\": true,\n  \"sla_breach\": true,\n  \"task_approved\": true,\n  \"task_rejected\": true,\n  \"task_completed\": false,\n  \"task_closed\": false,\n  \"comment_added\": true,\n  \"attachment_added\": false,\n  \"email_frequency\": \"daily\"\n}"},
+            "url": {"raw": "{{base_url}}/api/v1/notification-preferences/me/", "host": ["{{base_url}}"], "path": ["api", "v1", "notification-preferences", "me", ""]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Health & Docs",
+      "item": [
+        {
+          "name": "Health - Overall",
+          "request": {"auth": {"type": "noauth"}, "method": "GET", "url": {"raw": "{{base_url}}/health/", "host": ["{{base_url}}"], "path": ["health", ""]}}
+        },
+        {
+          "name": "Health - Database",
+          "request": {"auth": {"type": "noauth"}, "method": "GET", "url": {"raw": "{{base_url}}/health/db/", "host": ["{{base_url}}"], "path": ["health", "db", ""]}}
+        },
+        {
+          "name": "Health - Redis",
+          "request": {"auth": {"type": "noauth"}, "method": "GET", "url": {"raw": "{{base_url}}/health/redis/", "host": ["{{base_url}}"], "path": ["health", "redis", ""]}}
+        },
+        {
+          "name": "Health - Celery",
+          "request": {"auth": {"type": "noauth"}, "method": "GET", "url": {"raw": "{{base_url}}/health/celery/", "host": ["{{base_url}}"], "path": ["health", "celery", ""]}}
+        },
+        {
+          "name": "OpenAPI Schema",
+          "request": {"auth": {"type": "noauth"}, "method": "GET", "url": {"raw": "{{base_url}}/api/schema/", "host": ["{{base_url}}"], "path": ["api", "schema", ""]}}
+        }
+      ]
     }
   ]
 }
-

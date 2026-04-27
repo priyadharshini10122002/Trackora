@@ -47,8 +47,9 @@ export function TaskForm({
     setError,
     setValue,
     formState: { errors, isDirty },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } = useForm<TaskCreateInput>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(schema) as any,
     defaultValues: {
       title: '',
       description: '',

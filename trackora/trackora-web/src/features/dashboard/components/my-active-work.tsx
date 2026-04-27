@@ -11,10 +11,18 @@ import {
   CardContent,
   Skeleton,
 } from '@/shared/ui';
+import { cn } from '@/shared/lib/cn';
 import { EmptyState } from '@/shared/components/empty-state';
 import { formatRelative } from '@/shared/lib/date';
 import { getPriorityConfig } from '@/shared/config/constants';
 import { dashboardKeys } from '../api/keys';
+
+const PRIORITY_DOT: Record<string, string> = {
+  LOW: 'bg-gray-400',
+  MEDIUM: 'bg-blue-500',
+  HIGH: 'bg-amber-500',
+  CRITICAL: 'bg-red-500 animate-pulse',
+};
 
 export function MyActiveWork() {
   const { data, isLoading } = useQuery({
@@ -30,24 +38,25 @@ export function MyActiveWork() {
   const tasks = data?.results ?? [];
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base font-semibold">
+    <Card className="card-hover glass-subtle overflow-hidden">
+      <CardHeader className="flex flex-row items-center justify-between border-b border-border/50 pb-4">
+        <CardTitle className="text-sm font-semibold tracking-tight">
           My Active Work
         </CardTitle>
         <Link
           to="/tasks?status=IN_PROGRESS&assigned_to=me"
-          className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
         >
-          View all <ArrowRight className="h-4 w-4" />
+          View all <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-0">
         {isLoading ? (
-          <div className="space-y-3">
+          <div className="space-y-1 p-4">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <Skeleton className="h-10 w-full" />
+              <div key={i} className="flex items-center gap-3 py-2">
+                <Skeleton className="h-2 w-2 rounded-full" />
+                <Skeleton className="h-4 flex-1" />
               </div>
             ))}
           </div>
@@ -59,25 +68,36 @@ export function MyActiveWork() {
             className="py-8"
           />
         ) : (
-          <ul className="divide-y divide-border">
+          <ul>
             {tasks.map((task) => {
               const priority = getPriorityConfig(task.priority);
               return (
                 <li key={task.id}>
                   <Link
                     to={`/tasks/${task.id}`}
-                    className="flex items-center justify-between gap-3 py-3 hover:bg-muted/50 -mx-2 px-2 rounded-md transition-colors"
+                    className="group flex items-center justify-between gap-3 px-5 py-3 transition-all duration-200 hover:bg-accent/50 hover:translate-x-0.5"
                   >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">
-                        {task.title}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Updated {formatRelative(task.updated_at)}
-                      </p>
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <span
+                        className={cn(
+                          'inline-block h-2 w-2 shrink-0 rounded-full',
+                          PRIORITY_DOT[task.priority] ?? 'bg-gray-400',
+                        )}
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium group-hover:text-primary transition-colors">
+                          {task.title}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Updated {formatRelative(task.updated_at ?? task.created_at)}
+                        </p>
+                      </div>
                     </div>
                     <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${priority?.color ?? 'text-muted-foreground'}`}
+                      className={cn(
+                        'shrink-0 text-[11px] font-medium',
+                        priority?.color ?? 'text-muted-foreground',
+                      )}
                     >
                       {priority?.label ?? task.priority}
                     </span>
