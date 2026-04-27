@@ -11,6 +11,7 @@ import { FullscreenSpinner } from '@/shared/components/loading-states';
 
 // ── Lazy pages ─────────────────────────────────────────────────────
 
+const LandingPage = lazy(() => import('@/pages/landing/index'));
 const LoginPage = lazy(() => import('@/pages/auth/login'));
 const RegisterPage = lazy(() => import('@/pages/auth/register'));
 const DashboardPage = lazy(() => import('@/pages/dashboard/index'));
@@ -31,7 +32,7 @@ function ForbiddenPage() {
       <p className="text-muted-foreground">
         You don't have permission to access this page.
       </p>
-      <a href="/" className="text-primary underline">
+      <a href="/dashboard" className="text-primary underline">
         Back to Dashboard
       </a>
     </div>
@@ -53,6 +54,7 @@ export const router = createBrowserRouter(
     <>
       {/* Public routes */}
       <Route element={<SuspenseWrapper />}>
+        <Route index element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
       </Route>
@@ -66,7 +68,7 @@ export const router = createBrowserRouter(
         }
       >
         <Route element={<SuspenseWrapper />}>
-          <Route index element={<DashboardPage />} />
+          <Route path="dashboard" element={<DashboardPage />} />
           <Route path="tasks" element={<TasksPage />} />
           <Route path="tasks/new" element={<NewTaskPage />} />
           <Route path="tasks/:id" element={<TaskDetailPage />} />

@@ -30,7 +30,7 @@ import { tokenStore, refreshStore } from '@/shared/auth/token-store';
 // ── Breadcrumb label from pathname ─────────────────────────────────
 
 const ROUTE_LABELS: Record<string, string> = {
-  '/': 'Dashboard',
+  '/dashboard': 'Dashboard',
   '/tasks': 'Tasks',
   '/tasks/new': 'New Task',
   '/notifications': 'Notifications',

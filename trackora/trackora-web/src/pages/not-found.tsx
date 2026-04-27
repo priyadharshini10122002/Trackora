@@ -49,7 +49,7 @@ function NotFoundPage() {
           size="lg"
           className="gap-2 shadow-[var(--shadow-glow)] transition-all duration-200 hover:shadow-[var(--shadow-glow)]"
         >
-          <Link to="/">
+          <Link to="/dashboard">
             <ArrowLeft className="h-4 w-4" />
             Back to Dashboard
           </Link>

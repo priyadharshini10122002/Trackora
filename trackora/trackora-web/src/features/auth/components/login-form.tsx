@@ -50,7 +50,7 @@ export function LoginForm() {
   function onSubmit(values: LoginFormValues) {
     login.mutate(values, {
       onSuccess: () => {
-        navigate('/', { replace: true });
+        navigate('/dashboard', { replace: true });
       },
     });
   }

@@ -36,7 +36,7 @@ import type { Role } from '@/shared/auth/permissions';
 // ── Navigation config ──────────────────────────────────────────────
 
 const mainNav: SidebarItem[] = [
-  { label: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Tasks', href: '/tasks', icon: CheckSquare },
   { label: 'Notifications', href: '/notifications', icon: Bell },
   { label: 'Settings', href: '/settings', icon: Settings },
@@ -207,7 +207,7 @@ function SidebarNavLink({
   const link = (
     <NavLink
       to={item.href}
-      end={item.href === '/'}
+      end={item.href === '/dashboard'}
       className={({ isActive }) =>
         cn(
           'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
